@@ -104,8 +104,9 @@ mongoose
     } catch (err) {
       console.error("Failed to load notification cron:", err);
     }
-    server.listen(5002, "0.0.0.0", () => {
-      console.log(`🚀 Server is running on port: 5002`);
+    const PORT = process.env.PORT || 5002;
+    server.listen(PORT, "0.0.0.0", () => {
+      console.log(`🚀 Server is running on port: ${PORT}`);
     });
   })
   .catch((error) => {
