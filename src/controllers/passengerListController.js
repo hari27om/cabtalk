@@ -8,9 +8,9 @@ import Passenger from "../models/Passenger.js"; // make sure this path is correc
 import { sendWhatsAppMessage } from "../utils/whatsappHelper.js";
 import { isScheduledToday } from "../utils/weekoffPassengerHelper.js";
 
-function formatTitle(name = "Unknown", phoneNumber = "") {
-  const MAX = 24;
-  const SEP = " 📞 ";
+function formatTitle(name = "", phoneNumber = "") {
+  const MAX = 22;
+  const SEP = " 📞";
   let title = `${name}${SEP}${phoneNumber}`;
   const overflow = title.length - MAX;
   if (overflow > 0) {
@@ -95,7 +95,6 @@ export const sendPassengerList = async (req, res) => {
 
     const debug = [];
 
-    // We'll build rows for WATI
     const rows = [];
 
     // iterate passengers in the shift block
@@ -135,7 +134,6 @@ export const sendPassengerList = async (req, res) => {
         else if (boarded) excludedReason = "already boarded";
 
         if (!excludedReason) {
-          // Build row for WATI
           const title = formatTitle(passengerObj.Employee_Name, passengerObj.Employee_PhoneNumber);
           const description = (`📍 ${passengerObj.Employee_Address || "Address not available"}`).slice(0, 70);
           rows.push({ title, description });
@@ -172,17 +170,6 @@ export const sendPassengerList = async (req, res) => {
     console.log(`[sendPassengerList] Passengers included in list: ${rows.length}`);
     console.log(`[sendPassengerList] Debug sample (first 10):`, JSON.stringify(debug.slice(0, 10), null, 2));
 
-    if (rows.length === 0) {
-      console.log(`[sendPassengerList] No passengers to send (all boarded/none scheduled).`);
-      await sendWhatsAppMessage(phoneNumber, "All passengers of the shift have boarded or none scheduled today.");
-      return res.status(200).json({
-        success: true,
-        message: "No passengers available today.",
-        rows,
-        debug
-      });
-    }
-
     const watiPayload = {
       header: "Ride Details",
       body: `Passenger list (${driver.vehicleNumber || "Unknown Vehicle"}):`,
@@ -199,7 +186,7 @@ export const sendPassengerList = async (req, res) => {
           Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI5MzAwNGExMi04OWZlLTQxN2MtODBiNy0zMTljMjY2ZjliNjUiLCJ1bmlxdWVfbmFtZSI6ImhhcmkudHJpcGF0aGlAZ3hpbmV0d29ya3MuY29tIiwibmFtZWlkIjoiaGFyaS50cmlwYXRoaUBneGluZXR3b3Jrcy5jb20iLCJlbWFpbCI6ImhhcmkudHJpcGF0aGlAZ3hpbmV0d29ya3MuY29tIiwiYXV0aF90aW1lIjoiMDIvMDEvMjAyNSAwODozNDo0MCIsInRlbmFudF9pZCI6IjM4ODQyOCIsImRiX25hbWUiOiJtdC1wcm9kLVRlbmFudHMiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBRE1JTklTVFJBVE9SIiwiZXhwIjoyNTM0MDIzMDA4MDAsImlzcyI6IkNsYXJlX0FJIiwiYXVkIjoiQ2xhcmVfQUkifQ.tvRl-g9OGF3kOq6FQ-PPdRtfVrr4BkfxrRKoHc7tbC0`,
           "Content-Type": "application/json-patch+json",
         },
-        timeout: 15_000
+        timeout: 15000
       }
     );
 
