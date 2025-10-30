@@ -1,37 +1,43 @@
 // utils/notificationScheduler.js
 const WATI_URL = "https://live-mt-server.wati.io/388428/api/v1/sendTemplateMessages";
-const WATI_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI5MzAwNGExMi04OWZlLTQxN2MtODBiNy0zMTljMjY2ZjliNjUiLCJ1bmlxdWVfbmFtZSI6ImhhcmkudHJpcGF0aGlAZ3hpbmV0d29ya3MuY29tIiwibmFtZWlkIjoiaGFyaS50cmlwYXRoaUBneGluZXR3b3Jrcy5jb20iLCJlbWFpbCI6ImhhcmkudHJpcGF0aGlAZ3hpbmV0d29ya3MuY29tIiwiYXV0aF90aW1lIjoiMDIvMDEvMjAyNSAwODozNDo0MCIsInRlbmFudF9pZCI6IjM4ODQyOCIsImRiX25hbWUiOiJtdC1wcm9kLVRlbmFudHMiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBRE1JTklTVFJBVE9SIiwiZXhwIjoyNTM0MDIzMDA4MDAsImlzcyI6IkNsYXJlX0FJIiwiYXVkIjoiQ2xhcmVfQUkifQ.tvRl-g9OGF3kOq6FQ-PPdRtfVrr4BkfxrRKoHc7tbC0"
+const WATI_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjYTVkMDQzNS0yNWI2LTQ3YjEtOTEwMy1kNzQ2ZjExYjJkYjAiLCJ1bmlxdWVfbmFtZSI6ImhhcmkudHJpcGF0aGlAZ3hpbmV0d29ya3MuY29tIiwibmFtZWlkIjoiaGFyaS50cmlwYXRoaUBneGluZXR3b3Jrcy5jb20iLCJlbWFpbCI6ImhhcmkudHJpcGF0aGlAZ3hpbmV0d29ya3MuY29tIiwiYXV0aF90aW1lIjoiMTAvMzAvMjAyNSAwNTowOTo0MiIsInRlbmFudF9pZCI6IjM4ODQyOCIsImRiX25hbWUiOiJtdC1wcm9kLVRlbmFudHMiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBRE1JTklTVFJBVE9SIiwiZXhwIjoyNTM0MDIzMDA4MDAsImlzcyI6IkNsYXJlX0FJIiwiYXVkIjoiQ2xhcmVfQUkifQ.oKJCEd90MtewrKjk7ZfX3dOVjnKrk0GboGk-cYE3Ehg"
 
 function buildFirstName(name) {
   return String(name || "").trim().split(/\s+/)[0] || name || "";
 }
 
 async function postTemplate(payload) {
-
-  const res = await fetch(WATI_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json-patch+json",
-      Authorization: `Bearer ${WATI_TOKEN}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const text = await res.text().catch(() => "");
-  if (!res.ok) {
-    const err = new Error(`WATI API ${res.status}: ${text}`);
-    err.status = res.status;
-    throw err;
+  if (!WATI_TOKEN) {
+    throw new Error('WATI_TOKEN is not configured');
   }
 
-  // try parse JSON and also log a short summary
-  let parsed;
   try {
-    parsed = JSON.parse(text || "{}");
-  } catch (e) {
-    parsed = { raw: text };
+    const res = await fetch(WATI_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json-patch+json",
+        Authorization: `Bearer ${WATI_TOKEN}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const text = await res.text();
+    
+    if (res.status === 401) {
+      throw new Error(`WATI API Authentication Failed: Token may be expired or invalid`);
+    }
+    
+    if (!res.ok) {
+      throw new Error(`WATI API ${res.status}: ${text}`);
+    }
+    return JSON.parse(text || "{}");
+  } catch (error) {
+    console.error('WATI API Request Failed:', {
+      error: error.message,
+      payload: payload
+    });
+    throw error;
   }
-  return parsed;
 }
 
 export async function sendPickupTemplateBefore10Min(phoneNumber, name) {
