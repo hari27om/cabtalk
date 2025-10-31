@@ -5,17 +5,14 @@ import Journey from "../models/JourneyModel.js";
 import Passenger from "../models/Passenger.js";
 import { sendWhatsAppMessage } from "../utils/whatsappHelper.js";
 
-// Helper functions
+const MAX_TITLE_LEN = 24;
+const SEP = "📞";
 const formatTitle = (name = "", phoneNumber = "") => {
-  const MAX = 22;
-  const SEP = " 📞";
   let title = `${name}${SEP}${phoneNumber}`;
-  const overflow = title.length - MAX;
-  if (overflow > 0) {
-    const allowedNameLen = Math.max(0, name.length - overflow);
-    title = `${name.slice(0, allowedNameLen)}${SEP}${phoneNumber}`;
-  }
-  return title;
+  if (title.length <= MAX_TITLE_LEN) return title;
+  const overflow = title.length - MAX_TITLE_LEN;
+  const allowedNameLen = Math.max(0, name.length - overflow);
+  return `${name.slice(0, allowedNameLen)}${SEP}${phoneNumber}`;
 };
 
 const toIdString = (v) => {
@@ -25,69 +22,93 @@ const toIdString = (v) => {
   return String(v);
 };
 
-const getBoardedPassengersSet = (journey) => {
-  return new Set((journey.boardedPassengers || []).map(bp => 
-    bp && bp.passenger ? toIdString(bp.passenger) : toIdString(bp)
-  ));
+const getBoardedPassengersSet = (journey = {}) => {
+  const arr = journey.boardedPassengers || [];
+  return new Set(
+    arr.map((bp) => {
+      if (!bp) return "";
+      if (typeof bp === "object" && bp.passenger) return toIdString(bp.passenger);
+      return toIdString(bp);
+    })
+  );
 };
 
 export const sendPassengerList = async (req, res) => {
   try {
     const { phoneNumber } = req.body;
-    
     if (!phoneNumber) {
       return res.status(400).json({ success: false, message: "Phone number is required." });
     }
 
-    const driver = await Driver.findOne({ phoneNumber }).lean();
+    const driver = await Driver.findOne({ phoneNumber })
+      .select("_id vehicleNumber")
+      .lean();
     if (!driver) {
       return res.status(404).json({ success: false, message: "Driver not found." });
     }
 
-    const asset = await Asset.findOne({ driver: driver._id }).populate({
-      path: "passengers.passengers.passenger",
-      model: "Passenger",
-      select: "Employee_Name Employee_PhoneNumber Employee_Address",
-    }).lean();
+    const [asset, journey] = await Promise.all([
+      Asset.findOne({ driver: driver._id })
+        .select("passengers")
+        .populate({
+          path: "passengers.passengers.passenger",
+          model: "Passenger",
+          select: "Employee_Name Employee_PhoneNumber Employee_Address",
+        })
+        .lean(),
+      Journey.findOne({ Driver: driver._id })
+        .select("Journey_shift boardedPassengers")
+        .lean(),
+    ]);
 
     if (!asset) {
       return res.status(404).json({ success: false, message: "No asset assigned to this driver." });
     }
-
-    const journey = await Journey.findOne({ Driver: driver._id }).lean();
     if (!journey) {
       return res.status(500).json({ success: false, message: "Journey record missing." });
     }
 
-    const shiftBlock = (asset.passengers || []).find(b => b.shift === journey.Journey_shift);
-    if (!shiftBlock || !Array.isArray(shiftBlock.passengers)) {
+    const shiftBlock = (asset.passengers || []).find((b) => b.shift === journey.Journey_shift);
+    if (!shiftBlock || !Array.isArray(shiftBlock.passengers) || shiftBlock.passengers.length === 0) {
       await sendWhatsAppMessage(phoneNumber, "No passengers assigned.");
       return res.json({ success: true, message: "No passengers assigned." });
     }
 
     const boardedSet = getBoardedPassengersSet(journey);
-    const rows = [];
+    const passengerEntries = shiftBlock.passengers || [];
 
-    // Process passengers
-    for (const ps of shiftBlock.passengers) {
+    const missingIds = [];
+    const passengerMap = new Map();
+
+    for (const ps of passengerEntries) {
       if (!ps || !ps.passenger) continue;
-
-      let passengerObj = ps.passenger;
-      const passengerId = toIdString(passengerObj);
-      
-      // Skip if already boarded
-      if (boardedSet.has(passengerId)) continue;
-
-      // Load passenger data if not populated
-      const isPopulated = typeof passengerObj === "object" && passengerObj.Employee_Name;
-      if (!isPopulated) {
-        passengerObj = await Passenger.findById(passengerId)
-          .select("Employee_Name Employee_PhoneNumber Employee_Address")
-          .lean();
-        if (!passengerObj) continue;
+      const p = ps.passenger;
+      const id = toIdString(p);
+      if (typeof p === "object" && p.Employee_Name) {
+        passengerMap.set(id, p);
+      } else {
+        missingIds.push(id);
       }
+    }
+    if (missingIds.length > 0) {
+      const missingPassengers = await Passenger.find({ _id: { $in: missingIds } })
+        .select("Employee_Name Employee_PhoneNumber Employee_Address")
+        .lean();
+      for (const mp of missingPassengers) {
+        passengerMap.set(String(mp._id), mp);
+      }
+    }
+    const rows = [];
+    for (const ps of passengerEntries) {
+      if (!ps || !ps.passenger) continue;
+      const pId = toIdString(ps.passenger);
+      if (!pId) continue;
+      if (boardedSet.has(pId)) continue; 
 
-      const title = formatTitle(passengerObj.Employee_Name, passengerObj.Employee_PhoneNumber);
+      const passengerObj = passengerMap.get(pId);
+      if (!passengerObj) continue;
+
+      const title = formatTitle(passengerObj.Employee_Name || "Unknown", passengerObj.Employee_PhoneNumber || "");
       const description = (`📍 ${passengerObj.Employee_Address || "Address not available"}`).slice(0, 70);
       rows.push({ title, description });
     }
@@ -104,16 +125,23 @@ export const sendPassengerList = async (req, res) => {
       buttonText: "Menu",
       sections: [{ title: "Passenger Details", rows }],
     };
-    
+    const WATI_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjYTVkMDQzNS0yNWI2LTQ3YjEtOTEwMy1kNzQ2ZjExYjJkYjAiLCJ1bmlxdWVfbmFtZSI6ImhhcmkudHJpcGF0aGlAZ3hpbmV0d29ya3MuY29tIiwibmFtZWlkIjoiaGFyaS50cmlwYXRoaUBneGluZXR3b3Jrcy5jb20iLCJlbWFpbCI6ImhhcmkudHJpcGF0aGlAZ3hpbmV0d29ya3MuY29tIiwiYXV0aF90aW1lIjoiMTAvMzAvMjAyNSAwNTowOTo0MiIsInRlbmFudF9pZCI6IjM4ODQyOCIsImRiX25hbWUiOiJtdC1wcm9kLVRlbmFudHMiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBRE1JTklTVFJBVE9SIiwiZXhwIjoyNTM0MDIzMDA4MDAsImlzcyI6IkNsYXJlX0FJIiwiYXVkIjoiQ2xhcmVfQUkifQ.oKJCEd90MtewrKjk7ZfX3dOVjnKrk0GboGk-cYE3Ehg";
+    const WATI_BASE = "https://live-mt-server.wati.io/388428";
+
+    if (!WATI_API_KEY) {
+      console.error("[sendPassengerList] Missing WATI_API_KEY env var");
+      return res.status(500).json({ success: false, message: "Server misconfiguration: WATI key missing." });
+    }
+
     const response = await axios.post(
-      `https://live-mt-server.wati.io/388428/api/v1/sendInteractiveListMessage?whatsappNumber=${phoneNumber}`,
+      `${WATI_BASE}/api/v1/sendInteractiveListMessage?whatsappNumber=${encodeURIComponent(phoneNumber)}`,
       watiPayload,
       {
         headers: {
-          Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjYTVkMDQzNS0yNWI2LTQ3YjEtOTEwMy1kNzQ2ZjExYjJkYjAiLCJ1bmlxdWVfbmFtZSI6ImhhcmkudHJpcGF0aGlAZ3hpbmV0d29ya3MuY29tIiwibmFtZWlkIjoiaGFyaS50cmlwYXRoaUBneGluZXR3b3Jrcy5jb20iLCJlbWFpbCI6ImhhcmkudHJpcGF0aGlAZ3hpbmV0d29ya3MuY29tIiwiYXV0aF90aW1lIjoiMTAvMzAvMjAyNSAwNTowOTo0MiIsInRlbmFudF9pZCI6IjM4ODQyOCIsImRiX25hbWUiOiJtdC1wcm9kLVRlbmFudHMiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBRE1JTklTVFJBVE9SIiwiZXhwIjoyNTM0MDIzMDA4MDAsImlzcyI6IkNsYXJlX0FJIiwiYXVkIjoiQ2xhcmVfQUkifQ.oKJCEd90MtewrKjk7ZfX3dOVjnKrk0GboGk-cYE3Ehg`,
+          Authorization: `Bearer ${WATI_API_KEY}`,
           "Content-Type": "application/json-patch+json",
         },
-        timeout: 15000
+        timeout: 15000,
       }
     );
 
@@ -122,13 +150,12 @@ export const sendPassengerList = async (req, res) => {
       message: "Passenger list sent successfully via WhatsApp.",
       data: response.data,
     });
-
   } catch (error) {
     console.error(`[sendPassengerList] Error: ${error?.message || error}`);
     return res.status(500).json({
       success: false,
       message: "Internal error",
-      error: error?.message || String(error)
+      error: error?.message || String(error),
     });
   }
 };

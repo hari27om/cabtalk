@@ -79,18 +79,68 @@ export const updatePassenger = asyncHandler(async (req, res) => {
 
 export const deletePassenger = asyncHandler(async (req, res) => {
   const { id } = req.params;
+  
   if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Valid Passenger ID is required." });
+    return res.status(400).json({ 
+      success: false, 
+      message: "Valid Passenger ID is required." 
+    });
   }
-  const deletedPassenger = await Passenger.findByIdAndDelete(id);
-  if (!deletedPassenger) {
-    return res
-      .status(404)
-      .json({ success: false, message: "Passenger not found." });
+
+  try {
+    // Check if passenger has any associated assets
+    const passenger = await Passenger.findById(id);
+    
+    if (!passenger) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Passenger not found." 
+      });
+    }
+
+    // Check if passenger is assigned to any asset
+    if (passenger.asset) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot delete passenger. Passenger is assigned to an asset. Please remove passenger from asset first.",
+        assetId: passenger.asset
+      });
+    }
+
+    // Additional check: Verify passenger is not in any asset's passengers array
+    const assetWithPassenger = await Asset.findOne({
+      "passengers.passengers.passenger": id
+    });
+
+    if (assetWithPassenger) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot delete passenger. Passenger is assigned to an asset's shift. Please remove passenger from asset first.",
+        assetId: assetWithPassenger._id
+      });
+    }
+
+    const deletedPassenger = await Passenger.findByIdAndDelete(id);
+    
+    if (!deletedPassenger) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Passenger not found." 
+      });
+    }
+
+    const io = req.app.get("io");
+    io.emit("passengerDeleted", deletedPassenger);
+
+    res.status(200).json({ 
+      success: true, 
+      message: "Passenger deleted successfully." 
+    });
+  } catch (error) {
+    console.error("Error deleting passenger:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "An error occurred while deleting the passenger.",
+    });
   }
-  res
-    .status(200)
-    .json({ success: true, message: "Passenger deleted successfully." });
 });
