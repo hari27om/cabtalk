@@ -1,4 +1,5 @@
 import Driver from "../models/driverModel.js";
+import Asset from "../models/assetModel.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 
 export const addDriver = asyncHandler(async (req, res) => {
@@ -98,7 +99,6 @@ export const deleteDriver = asyncHandler(async (req, res) => {
   }
 
   try {
-    // Check if driver has any associated assets
     const associatedAssets = await Asset.find({ driver: id });
     
     if (associatedAssets.length > 0) {
