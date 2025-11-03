@@ -1,6 +1,6 @@
-// seedShiftOptions.js
+// src/shiftscript.js
 import mongoose from "mongoose";
-import ShiftModel from "./models/ShiftModel";
+import ShiftModel from "./models/ShiftModel.js";
 
 const uri = "mongodb+srv://vivekverma:vivekvermagxi@cab-talk.gus9m.mongodb.net/cabDB"; // replace with your DB name
 

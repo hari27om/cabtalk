@@ -1,5 +1,5 @@
+// src/models/ShiftModel.js
 import mongoose from "mongoose";
-
 const ShiftOptionSchema = new mongoose.Schema(
   {
     name: {
