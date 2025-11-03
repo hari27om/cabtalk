@@ -59,3 +59,12 @@ export const renameShiftInOption = async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
+
+export const getShiftOptions = async (req, res) => {
+  try {
+    const shiftOptions = await ShiftOption.find().sort({ name: 1 });
+    return res.status(200).json({ success: true, data: shiftOptions });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
