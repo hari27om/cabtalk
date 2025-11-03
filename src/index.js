@@ -16,6 +16,7 @@ import passengerListRoutes from "./routes/passengerListRoutes.js";
 import taxiRoutes from "./routes/taxiRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import passengerLeaveRoutes from "./routes/passengerLeaveRoutes.js";
+import shiftRoutes from "./routes/shiftRoutes.js";
 import shiftChangeRoutes from "./routes/shiftChangeRoutes.js";
 
 const app = express();
@@ -71,6 +72,7 @@ app.use("/api/v1/pass", passengerListRoutes);
 app.use("/api/v1/taxi", taxiRoutes);
 app.use("/api/v1", notificationRoutes);
 app.use("/api/v1/leaves", passengerLeaveRoutes);
+app.use("/api/v1/shiftOptions", shiftRoutes);
 app.use("/api/v1", shiftChangeRoutes);
 
 io.on("connection", (socket) => {

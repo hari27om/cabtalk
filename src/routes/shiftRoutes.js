@@ -1,0 +1,14 @@
+import express from "express";
+import {
+  addShiftToOption,
+  removeShiftFromOption,
+  renameShiftInOption,
+} from "../controllers/shiftController.js";
+
+const router = express.Router();
+
+router.post("/:id/shifts", addShiftToOption);
+router.delete("/:id/shifts", removeShiftFromOption);
+router.put("/:id/shifts", renameShiftInOption);
+
+export default router;
