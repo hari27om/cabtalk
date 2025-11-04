@@ -79,26 +79,20 @@ export const updatePassenger = asyncHandler(async (req, res) => {
 
 export const deletePassenger = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  
   if (!id || !mongoose.Types.ObjectId.isValid(id)) {
     return res.status(400).json({ 
       success: false, 
       message: "Valid Passenger ID is required." 
     });
   }
-
   try {
-    // Check if passenger has any associated assets
     const passenger = await Passenger.findById(id);
-    
     if (!passenger) {
       return res.status(404).json({ 
         success: false, 
         message: "Passenger not found." 
       });
     }
-
-    // Check if passenger is assigned to any asset
     if (passenger.asset) {
       return res.status(400).json({
         success: false,
@@ -106,12 +100,9 @@ export const deletePassenger = asyncHandler(async (req, res) => {
         assetId: passenger.asset
       });
     }
-
-    // Additional check: Verify passenger is not in any asset's passengers array
     const assetWithPassenger = await Asset.findOne({
       "passengers.passengers.passenger": id
     });
-
     if (assetWithPassenger) {
       return res.status(400).json({
         success: false,
@@ -119,16 +110,13 @@ export const deletePassenger = asyncHandler(async (req, res) => {
         assetId: assetWithPassenger._id
       });
     }
-
     const deletedPassenger = await Passenger.findByIdAndDelete(id);
-    
     if (!deletedPassenger) {
       return res.status(404).json({ 
         success: false, 
         message: "Passenger not found." 
       });
     }
-
     const io = req.app.get("io");
     io.emit("passengerDeleted", deletedPassenger);
 

@@ -95,8 +95,8 @@ app.use((err, req, res, next) => {
 });
 
 const MONGO_URI =
-  "mongodb+srv://vivekverma:vivekvermagxi@cab-talk.gus9m.mongodb.net/cabDB";
-  // "mongodb+srv://hariomtri27:12341234@cdb.3a41aii.mongodb.net/CDB";
+  // "mongodb+srv://vivekverma:vivekvermagxi@cab-talk.gus9m.mongodb.net/cabDB";
+  "mongodb+srv://hariomtri27:12341234@cdb.3a41aii.mongodb.net/CDB";
 
 mongoose
   .connect(MONGO_URI)
@@ -107,9 +107,8 @@ mongoose
     } catch (err) {
       console.error("Failed to load notification cron:", err);
     }
-    const PORT = process.env.PORT || 5002;
-    server.listen(PORT, "0.0.0.0", () => {
-      console.log(`🚀 Server is running on port: ${PORT}`);
+    server.listen(5002, "0.0.0.0", () => {
+      console.log(`🚀 Server is running on port: 5002`);
     });
   })
   .catch((error) => {
