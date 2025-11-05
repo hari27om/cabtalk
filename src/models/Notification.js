@@ -1,4 +1,3 @@
-// models/Notification.js
 import mongoose from "mongoose";
 
 const triggerSubSchema = new mongoose.Schema(
@@ -16,9 +15,6 @@ const triggerSubSchema = new mongoose.Schema(
       default: "pending",
       index: true,
     },
-    processingAt: { type: Date, default: null }, // when claimed for processing
-    processingRun: { type: String, default: null }, // runId that claimed it
-    retryCount: { type: Number, default: 0 }, // optional: increment on transient failures
   },
   { _id: false }
 );
@@ -42,9 +38,5 @@ const notificationSchema = new mongoose.Schema(
     triggers: { type: [triggerSubSchema], default: [] },
   },
   { timestamps: true }
-);
-notificationSchema.index(
-  { journeyId: 1, passengerId: 1, "triggers.type": 1 },
-  { unique: true, partialFilterExpression: { "triggers.type": { $exists: true } } }
 );
 export default mongoose.model("Notification", notificationSchema);
