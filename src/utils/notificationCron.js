@@ -53,7 +53,7 @@ if (!global.__notificationCronStarted) {
                 await sendBufferEndTemplate(phoneNumber, name);
                 const driverPhone = journey.Driver?.phoneNumber;
                 if (driverPhone) {
-                  const msg = `${name} is late for pickup. Please adjust schedule.`;
+                  const msg = `${name} is late for pickup, consider moving the cab.`;
                   await sendWhatsAppMessage(driverPhone, msg);
                 }
               }
