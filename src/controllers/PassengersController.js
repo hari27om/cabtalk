@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import Asset from "../models/Asset.js";
+import Asset from "../models/assetModel.js";
 import Passenger from "../models/Passenger.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 
