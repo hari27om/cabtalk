@@ -74,9 +74,26 @@ export async function storeJourneyNotifications(journeyId, passengers) {
 
       console.log(`👤 Processing passenger: ${data.name} (${data.passengerId})`);
 
+      const adjustDateToToday = (dateString) => {
+        const originalDate = new Date(dateString);
+        const today = new Date();
+        
+        const adjustedDate = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate(),
+          originalDate.getHours(),
+          originalDate.getMinutes(),
+          originalDate.getSeconds()
+        );
+        
+        console.log(`   📅 Date adjusted: ${originalDate.toISOString()} → ${adjustedDate.toISOString()}`);
+        return adjustedDate;
+      };
+
       // Buffer Start Trigger
       if (p.bufferStart) {
-        const bufferStart = new Date(p.bufferStart);
+        const bufferStart = adjustDateToToday(p.bufferStart);
         if (bufferStart > now) {
           const triggerTime = new Date(bufferStart.getTime() - 10 * 60 * 1000);
           if (triggerTime > now) {
@@ -99,7 +116,7 @@ export async function storeJourneyNotifications(journeyId, passengers) {
 
       // Buffer End Trigger
       if (p.bufferEnd) {
-        const bufferEnd = new Date(p.bufferEnd);
+        const bufferEnd = adjustDateToToday(p.bufferEnd);
         if (bufferEnd > now) {
           triggers.push({
             triggerId: crypto.randomUUID(),
