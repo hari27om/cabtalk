@@ -39,7 +39,6 @@ const shiftChangeSchema = new Schema(
   { timestamps: true }
 );
  
-// ✅ Generate unique shortId automatically
 shiftChangeSchema.pre("save", function (next) {
   if (!this.shortId) {
     this.shortId = nanoid();

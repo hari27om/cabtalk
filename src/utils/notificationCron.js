@@ -16,17 +16,17 @@ if (!global.__notificationCronStarted) {
   cron.schedule(POLL_CRON, async () => {
     const runId = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
     const now = new Date();
+    const currentHHmm = now.toTimeString().slice(0, 5);
 
     try {
-      const dueNotifications = await Notification.find({
+      const pendingNotifications = await Notification.find({
         "triggers.status": "pending",
-        "triggers.triggerTime": { $lte: now },
       }).select("_id journeyId passengerId phoneNumber name triggers");
 
-      if (!dueNotifications.length) return;
+      if (!pendingNotifications.length) return;
 
       const journeyIds = [
-        ...new Set(dueNotifications.map((n) => n.journeyId.toString())),
+        ...new Set(pendingNotifications.map((n) => n.journeyId.toString())),
       ];
 
       const journeys = await Journey.find({ _id: { $in: journeyIds } })
@@ -36,13 +36,20 @@ if (!global.__notificationCronStarted) {
       const journeyMap = new Map();
       journeys.forEach((j) => journeyMap.set(j._id.toString(), j));
 
-      for (const notif of dueNotifications) {
+      for (const notif of pendingNotifications) {
         const { _id: notifId, journeyId, phoneNumber, name, triggers } = notif;
         const journey = journeyMap.get(journeyId.toString());
 
-        const triggersToSend = triggers.filter(
-          (t) => t.status === "pending" && new Date(t.triggerTime) <= now
-        );
+        const triggersToSend = triggers.filter((t) => {
+          if (t.status !== "pending") return false;
+
+          const triggerTime = new Date(t.triggerTime);
+          const triggerHHmm = triggerTime.toTimeString().slice(0, 5);
+
+          return triggerHHmm === currentHHmm;
+        });
+
+        if (triggersToSend.length === 0) continue;
 
         for (const trigger of triggersToSend) {
           try {
@@ -59,11 +66,7 @@ if (!global.__notificationCronStarted) {
               }
               await updateTriggerStatus(notifId, trigger.triggerId, "sent");
             } else {
-              await updateTriggerStatus(
-                notifId,
-                trigger.triggerId,
-                "cancelled"
-              );
+              await updateTriggerStatus(notifId, trigger.triggerId, "cancelled");
             }
           } catch (err) {
             console.error(`Error in trigger ${trigger.triggerId}:`, err);
