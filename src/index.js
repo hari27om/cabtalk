@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { Server } from "socket.io";
+import dns from "node:dns/promises";
 
 import authRoutes from "./routes/authRoutes.js";
 import driverRoutes from "./routes/driverRoutes.js";
@@ -18,7 +19,9 @@ import notificationRoutes from "./routes/notificationRoutes.js";
 import passengerLeaveRoutes from "./routes/passengerLeaveRoutes.js";
 import shiftRoutes from "./routes/shiftRoutes.js";
 import shiftChangeRoutes from "./routes/shiftChangeRoutes.js";
+import gpsRoutes from "./routes/gpsRoutes.js";
 
+dns.setServers(["1.1.1.1"]);
 const app = express();
 const server = http.createServer(app);
 
@@ -74,6 +77,7 @@ app.use("/api/v1", notificationRoutes);
 app.use("/api/v1/leaves", passengerLeaveRoutes);
 app.use("/api/v1/shiftOptions", shiftRoutes);
 app.use("/api/v1", shiftChangeRoutes);
+app.use("/api/v1/gps", gpsRoutes);
 
 io.on("connection", (socket) => {
   socket.on("disconnect", () => {});
@@ -95,10 +99,10 @@ app.use((err, req, res, next) => {
 });
 
 const MONGO_URI =
-  // "mongodb+srv://vivekverma:vivekvermagxi@cab-talk.gus9m.mongodb.net/cabDB";
-  "mongodb+srv://hariomtri27:12341234@cdb.3a41aii.mongodb.net/CDB";
+  "mongodb+srv://vivekverma:vivekvermagxi@cab-talk.gus9m.mongodb.net/cabDB";
+// "mongodb+srv://hariomtri27:12341234@cdb.3a41aii.mongodb.net/CDB";
 
-mongoose
+await mongoose
   .connect(MONGO_URI)
   .then(async (connection) => {
     console.log(`MongoDB connected on host: ${connection.connection.host}`);

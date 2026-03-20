@@ -2,35 +2,16 @@
 import ShiftChange from "../models/ShiftChangeModel.js";
 import Passenger from "../models/Passenger.js";
 import Asset from "../models/assetModel.js";
- 
-// Convert a date string or Date in IST to a UTC Date object
-const istToUTC = (dateStringOrDate) => {
-  const date = new Date(dateStringOrDate);
-  const isoStringIST = date.toLocaleString("sv-SE", { timeZone: "Asia/Kolkata" });
-  const utcDate = new Date(isoStringIST);
-  return utcDate;
-};
- 
-// Get current time in IST and UTC
-const getNowISTAndUTC = () => {
-  const now = new Date();
-  const nowISTString = now.toLocaleString("sv-SE", { timeZone: "Asia/Kolkata" });
-  const nowIST = new Date(nowISTString);
-  const nowUTC = new Date(nowIST.getTime() - nowIST.getTimezoneOffset() * 60000);
-  return { nowIST, nowUTC };
-};
- 
+
 const processShiftChanges = async () => {
- 
   try {
-    const { nowIST, nowUTC } = getNowISTAndUTC();
+    const now = new Date();
     const scheduledChanges = await ShiftChange.find({
       status: "scheduled",
-      effectiveAt: { $lte: nowUTC },
+      effectiveAt: { $lte: now },
     });
- 
+
     for (const change of scheduledChanges) {
- 
       try {
         const passenger = await Passenger.findById(change.passengerId);
         if (!passenger) {
@@ -39,11 +20,12 @@ const processShiftChanges = async () => {
           await change.save();
           continue;
         }
+
         let asset = null;
         if (change.assetId) {
           asset = await Asset.findById(change.assetId);
         }
- 
+
         if (!asset && change.vehicleNumber) {
           asset = await Asset.findOne({ shortId: change.vehicleNumber });
           if (asset) {
@@ -59,7 +41,7 @@ const processShiftChanges = async () => {
             });
           }
         }
- 
+
         if (!asset) {
           change.status = "failed";
           change.error = "Asset not found";
@@ -87,6 +69,7 @@ const processShiftChanges = async () => {
         passenger.Employee_ShiftTiming = change.shift;
         passenger.asset = asset._id;
         await passenger.save();
+
         asset.passengers = asset.passengers
           .map((shiftGroup) => {
             shiftGroup.passengers = shiftGroup.passengers.filter(
@@ -95,27 +78,26 @@ const processShiftChanges = async () => {
             return shiftGroup;
           })
           .filter((shiftGroup) => shiftGroup.passengers.length > 0);
- 
+
         const passengerEntry = {
           passenger: passenger._id,
           requiresTransport: true,
-          bufferStart: istToUTC(change.startBuffer),
-          bufferEnd: istToUTC(change.endBuffer),
+          bufferStart: change.startBuffer ? new Date(change.startBuffer) : null,
+          bufferEnd: change.endBuffer ? new Date(change.endBuffer) : null,
           wfoDays: change.wfoDays || [],
         };
- 
+
         let shiftGroup = asset.passengers.find((s) => s.shift === change.shift);
         if (!shiftGroup) {
           asset.passengers.push({ shift: change.shift, passengers: [passengerEntry] });
         } else {
           shiftGroup.passengers.push(passengerEntry);
         }
- 
-        // STEP 7: Update vehicleNumber if provided
+
         if (change.vehicleNumber) {
           asset.shortId = change.vehicleNumber;
         }
- 
+
         await asset.save();
 
         change.status = "applied";
@@ -124,7 +106,7 @@ const processShiftChanges = async () => {
         await change.save();
       } catch (err) {
         change.status = "failed";
-        change.error = err.message;
+        change.error = err.message || String(err);
         await change.save();
       }
     }
@@ -132,6 +114,6 @@ const processShiftChanges = async () => {
     console.error("❌ Fatal error in processShiftChanges:", err);
   }
 };
- 
+
 export default processShiftChanges;
 export { processShiftChanges };

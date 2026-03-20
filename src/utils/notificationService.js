@@ -4,15 +4,13 @@ import Notification from "../models/Notification.js";
 import PassengerLeave from "../models/PassengerLeave.js";
 
 export async function storeJourneyNotifications(journeyId, passengers) {
-  console.log(`🔔 Starting notification storage for journey: ${journeyId}, passengers: ${passengers?.length || 0}`);
-  
+
   try {
     const journey = await Journey.findById(journeyId).lean();
     if (!journey) {
-      console.log(`❌ Journey not found: ${journeyId}`);
+      console.warn(`❌ Journey not found: ${journeyId}`);
       return;
     }
-    console.log(`✅ Journey found: ${journeyId}, asset: ${journey.Asset}, shift: ${journey.Journey_shift}`);
 
     const now = new Date();
     const journeyDateRaw = journey.originalStart
@@ -23,7 +21,6 @@ export async function storeJourneyNotifications(journeyId, passengers) {
       journeyDateRaw.getMonth(),
       journeyDateRaw.getDate()
     );
-    console.log(`📅 Processing for journey date: ${journeyDate.toISOString()}`);
 
     const leaves = await PassengerLeave.find({
       assetId: journey.Asset,
@@ -31,18 +28,29 @@ export async function storeJourneyNotifications(journeyId, passengers) {
       startDate: { $lte: journeyDate },
       endDate: { $gte: journeyDate },
     })
-    .select("passengerId")
-    .lean();
-
-    console.log(`📋 Found ${leaves.length} leave records for this asset/shift`);
+      .select("passengerId")
+      .lean();
 
     const leaveSet = new Set(leaves.map((l) => String(l.passengerId)));
     const bulkOps = [];
-    
+
     let skippedNoPassenger = 0;
     let skippedOnLeave = 0;
     let passengersWithTriggers = 0;
     let totalTriggers = 0;
+
+    const adjustDateToToday = (dateString) => {
+      const originalDate = new Date(dateString);
+      const today = new Date();
+      return new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate(),
+        originalDate.getHours(),
+        originalDate.getMinutes(),
+        originalDate.getSeconds()
+      );
+    };
 
     for (const p of passengers) {
       if (!p?.passenger) {
@@ -52,14 +60,12 @@ export async function storeJourneyNotifications(journeyId, passengers) {
 
       const passenger = p.passenger._id ? p.passenger : p.passenger;
       const pid = String(passenger._id || passenger);
-      
       if (!pid) {
         skippedNoPassenger++;
         continue;
       }
-      
+
       if (leaveSet.has(pid)) {
-        console.log(`⏸️  Skipping passenger on leave: ${pid}, name: ${passenger.Employee_Name}`);
         skippedOnLeave++;
         continue;
       }
@@ -71,27 +77,6 @@ export async function storeJourneyNotifications(journeyId, passengers) {
         phoneNumber: passenger.Employee_PhoneNumber,
         name: passenger.Employee_Name,
       };
-
-      console.log(`👤 Processing passenger: ${data.name} (${data.passengerId})`);
-
-      const adjustDateToToday = (dateString) => {
-        const originalDate = new Date(dateString);
-        const today = new Date();
-        
-        const adjustedDate = new Date(
-          today.getFullYear(),
-          today.getMonth(),
-          today.getDate(),
-          originalDate.getHours(),
-          originalDate.getMinutes(),
-          originalDate.getSeconds()
-        );
-        
-        console.log(`   📅 Date adjusted: ${originalDate.toISOString()} → ${adjustedDate.toISOString()}`);
-        return adjustedDate;
-      };
-
-      // Buffer Start Trigger
       if (p.bufferStart) {
         const bufferStart = adjustDateToToday(p.bufferStart);
         if (bufferStart > now) {
@@ -103,15 +88,8 @@ export async function storeJourneyNotifications(journeyId, passengers) {
               triggerTime,
               status: "pending",
             });
-            console.log(`   ⏰ Added before10Min trigger for: ${triggerTime.toISOString()}`);
-          } else {
-            console.log(`   ⏰ Skipping before10Min trigger - would have been in past: ${triggerTime.toISOString()}`);
           }
-        } else {
-          console.log(`   ⏰ Skipping before10Min trigger - bufferStart in past: ${bufferStart.toISOString()}`);
         }
-      } else {
-        console.log(`   ⏰ No bufferStart available`);
       }
 
       // Buffer End Trigger
@@ -124,22 +102,16 @@ export async function storeJourneyNotifications(journeyId, passengers) {
             triggerTime: bufferEnd,
             status: "pending",
           });
-          console.log(`   🔚 Added bufferEnd trigger for: ${bufferEnd.toISOString()}`);
-        } else {
-          console.log(`   🔚 Skipping bufferEnd trigger - in past: ${bufferEnd.toISOString()}`);
         }
-      } else {
-        console.log(`   🔚 No bufferEnd available`);
       }
 
       if (!triggers.length) {
-        console.log(`   ➕ No triggers created for passenger`);
         continue;
       }
 
       passengersWithTriggers++;
       totalTriggers += triggers.length;
-      
+
       bulkOps.push({
         updateOne: {
           filter: { journeyId: data.journeyId, passengerId: data.passengerId },
@@ -155,77 +127,66 @@ export async function storeJourneyNotifications(journeyId, passengers) {
           upsert: true,
         },
       });
-      
-      console.log(`   ✅ Prepared notification with ${triggers.length} triggers`);
     }
-
-    console.log(`📊 Summary:
-      - Total passengers: ${passengers?.length || 0}
-      - Skipped (no passenger data): ${skippedNoPassenger}
-      - Skipped (on leave): ${skippedOnLeave}
-      - Passengers with triggers: ${passengersWithTriggers}
-      - Total triggers: ${totalTriggers}
-      - Bulk operations: ${bulkOps.length}`);
 
     if (bulkOps.length > 0) {
       try {
-        console.log(`💾 Executing bulk write with ${bulkOps.length} operations...`);
         const result = await Notification.bulkWrite(bulkOps, { ordered: false });
-        console.log(`✅ Notifications stored successfully:
-          - Upserted: ${result.upsertedCount}
-          - Modified: ${result.modifiedCount}
-          - Matched: ${result.matchedCount}`);
       } catch (err) {
-        console.error(`❌ Notification bulkWrite error:`, {
+        console.error("❌ Notification bulkWrite error:", {
           message: err.message,
           code: err.code,
           bulkOpsCount: bulkOps.length,
-          journeyId,
-          stack: err.stack
         });
-        
-        // Log first few failed operations for debugging
         if (err.writeErrors && err.writeErrors.length > 0) {
-          console.error(`📝 First 3 write errors:`, err.writeErrors.slice(0, 3));
+          console.error("📝 Sample write errors:", err.writeErrors.slice(0, 3));
         }
       }
-    } else {
-      console.log(`ℹ️  No bulk operations to execute`);
     }
 
   } catch (error) {
-    console.error(`💥 Critical error in storeJourneyNotifications:`, {
+    console.error("💥 Critical error in storeJourneyNotifications:", {
       message: error.message,
-      stack: error.stack,
       journeyId,
-      passengerCount: passengers?.length
+      passengerCount: passengers?.length,
     });
   }
 }
 
 export async function cancelPendingNotificationsForPassenger(passengerId, journeyId) {
-  console.log(`🚫 Cancelling notifications for passenger: ${passengerId}, journey: ${journeyId}`);
-  
   try {
     const result = await Notification.updateMany(
       { passengerId, journeyId, "triggers.status": { $in: ["pending", "processing"] } },
       { $set: { "triggers.$[].status": "cancelled" } }
     );
-    
-    console.log(`✅ Notifications cancelled:`, {
-      passengerId,
-      journeyId,
-      matchedCount: result.matchedCount,
-      modifiedCount: result.modifiedCount
-    });
-    
     return result;
   } catch (error) {
-    console.error(`❌ Error cancelling notifications:`, {
+    console.error("❌ Error cancelling notifications:", {
       message: error.message,
-      stack: error.stack,
       passengerId,
-      journeyId
+      journeyId,
+    });
+    throw error;
+  }
+}
+
+export async function cancelBufferEndNotificationsForPassenger(passengerId, journeyId) {
+  try {
+    const res = await Notification.updateMany(
+      { passengerId, journeyId },
+      { $set: { "triggers.$[t].status": "cancelled" } },
+      {
+        arrayFilters: [
+          { "t.type": "bufferEnd", "t.status": { $in: ["pending", "processing"] } }
+        ]
+      }
+    );
+    return res;
+  } catch (error) {
+    console.error("❌ cancelBufferEndNotificationsForPassenger error:", {
+      message: error.message,
+      passengerId,
+      journeyId,
     });
     throw error;
   }

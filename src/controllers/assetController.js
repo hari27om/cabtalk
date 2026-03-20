@@ -109,7 +109,7 @@ export const getAllAssets = asyncHandler(async (req, res) => {
   try {
     const { day } = req.query;
     const assets = await Asset.find()
-      .populate("driver", "name vehicleNumber")
+      .populate("driver", "name vehicleNumber phoneNumber")
       .populate(
         "passengers.passengers.passenger",
         "Employee_ID Employee_Name Employee_PhoneNumber Employee_Address"
