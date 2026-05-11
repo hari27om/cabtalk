@@ -4,7 +4,6 @@ import mongoose from "mongoose";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { Server } from "socket.io";
-import dns from "node:dns/promises";
 
 import authRoutes from "./routes/authRoutes.js";
 import driverRoutes from "./routes/driverRoutes.js";
@@ -20,8 +19,10 @@ import passengerLeaveRoutes from "./routes/passengerLeaveRoutes.js";
 import shiftRoutes from "./routes/shiftRoutes.js";
 import shiftChangeRoutes from "./routes/shiftChangeRoutes.js";
 import gpsRoutes from "./routes/gpsRoutes.js";
+import alcoholTestRoutes from "./routes/alcoholTestRoutes.js";
+import dns from "node:dns";
 
-dns.setServers(["1.1.1.1"]);
+dns.promises.setServers(["1.1.1.1"]);
 const app = express();
 const server = http.createServer(app);
 
@@ -43,13 +44,13 @@ const corsOriginChecker = (origin, callback) => {
 // ✅ CORS options for Express
 const corsOptions = {
   origin: corsOriginChecker,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   credentials: true,
 };
 
 const ioCorsOptions = {
   origin: ALLOWED_ORIGINS,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   credentials: true,
 };
 const io = new Server(server, { cors: ioCorsOptions });
@@ -77,8 +78,8 @@ app.use("/api/v1", notificationRoutes);
 app.use("/api/v1/leaves", passengerLeaveRoutes);
 app.use("/api/v1/shiftOptions", shiftRoutes);
 app.use("/api/v1", shiftChangeRoutes);
-app.use("/api/v1/gps", gpsRoutes);
-
+app.use("/api/v1", gpsRoutes);
+app.use("/api/v1/alcohol", alcoholTestRoutes);
 io.on("connection", (socket) => {
   socket.on("disconnect", () => {});
 });
@@ -101,16 +102,15 @@ app.use((err, req, res, next) => {
 const MONGO_URI =
   "mongodb+srv://vivekverma:vivekvermagxi@cab-talk.gus9m.mongodb.net/cabDB";
 // "mongodb+srv://hariomtri27:12341234@cdb.3a41aii.mongodb.net/CDB";
-
-await mongoose
+await 
+mongoose
   .connect(MONGO_URI)
   .then(async (connection) => {
     console.log(`MongoDB connected on host: ${connection.connection.host}`);
     try {
       await import("./utils/notificationCron.js");
-    } catch (err) {
-      console.error("Failed to load notification cron:", err);
-    }
+      await import("./utils/OverspeedCron.js");
+    } catch (err) {}
     server.listen(5002, "0.0.0.0", () => {
       console.log(`🚀 Server is running on port: 5002`);
     });
