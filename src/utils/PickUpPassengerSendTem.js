@@ -1,7 +1,7 @@
 import axios from "axios";
+import wati_auth from "../config.js";
 
 const WATI_BASE = "https://live-mt-server.wati.io/388428/api/v1";
-const TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjYTVkMDQzNS0yNWI2LTQ3YjEtOTEwMy1kNzQ2ZjExYjJkYjAiLCJ1bmlxdWVfbmFtZSI6ImhhcmkudHJpcGF0aGlAZ3hpbmV0d29ya3MuY29tIiwibmFtZWlkIjoiaGFyaS50cmlwYXRoaUBneGluZXR3b3Jrcy5jb20iLCJlbWFpbCI6ImhhcmkudHJpcGF0aGlAZ3hpbmV0d29ya3MuY29tIiwiYXV0aF90aW1lIjoiMTAvMzAvMjAyNSAwNTowOTo0MiIsInRlbmFudF9pZCI6IjM4ODQyOCIsImRiX25hbWUiOiJtdC1wcm9kLVRlbmFudHMiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBRE1JTklTVFJBVE9SIiwiZXhwIjoyNTM0MDIzMDA4MDAsImlzcyI6IkNsYXJlX0FJIiwiYXVkIjoiQ2xhcmVfQUkifQ.oKJCEd90MtewrKjk7ZfX3dOVjnKrk0GboGk-cYE3Ehg";
 
 export async function sendPickupConfirmationMessage(phoneNumber, passengerName) {
   if (!phoneNumber || !passengerName) {
@@ -31,7 +31,7 @@ export async function sendPickupConfirmationMessage(phoneNumber, passengerName) 
   try {
     const response = await axios.post(url, payload, {
       headers: {
-        Authorization: TOKEN,
+        Authorization: `Bearer ${wati_auth}`,
         "Content-Type": "application/json-patch+json",
       },
       timeout: 10000,

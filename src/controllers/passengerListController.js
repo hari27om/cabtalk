@@ -4,6 +4,7 @@ import Asset from "../models/assetModel.js";
 import Journey from "../models/JourneyModel.js";
 import Passenger from "../models/Passenger.js";
 import { sendWhatsAppMessage } from "../utils/whatsappHelper.js";
+import wati_auth  from "../config.js";
 
 const MAX_TITLE_LEN = 24;
 const SEP = "📞";
@@ -27,7 +28,8 @@ const getBoardedPassengersSet = (journey = {}) => {
   return new Set(
     arr.map((bp) => {
       if (!bp) return "";
-      if (typeof bp === "object" && bp.passenger) return toIdString(bp.passenger);
+      if (typeof bp === "object" && bp.passenger)
+        return toIdString(bp.passenger);
       return toIdString(bp);
     })
   );
@@ -37,14 +39,18 @@ export const sendPassengerList = async (req, res) => {
   try {
     const { phoneNumber } = req.body;
     if (!phoneNumber) {
-      return res.status(400).json({ success: false, message: "Phone number is required." });
+      return res
+        .status(400)
+        .json({ success: false, message: "Phone number is required." });
     }
 
     const driver = await Driver.findOne({ phoneNumber })
       .select("_id vehicleNumber")
       .lean();
     if (!driver) {
-      return res.status(404).json({ success: false, message: "Driver not found." });
+      return res
+        .status(404)
+        .json({ success: false, message: "Driver not found." });
     }
 
     const [asset, journey] = await Promise.all([
@@ -62,14 +68,24 @@ export const sendPassengerList = async (req, res) => {
     ]);
 
     if (!asset) {
-      return res.status(404).json({ success: false, message: "No asset assigned to this driver." });
+      return res
+        .status(404)
+        .json({ success: false, message: "No asset assigned to this driver." });
     }
     if (!journey) {
-      return res.status(500).json({ success: false, message: "Journey record missing." });
+      return res
+        .status(500)
+        .json({ success: false, message: "Journey record missing." });
     }
 
-    const shiftBlock = (asset.passengers || []).find((b) => b.shift === journey.Journey_shift);
-    if (!shiftBlock || !Array.isArray(shiftBlock.passengers) || shiftBlock.passengers.length === 0) {
+    const shiftBlock = (asset.passengers || []).find(
+      (b) => b.shift === journey.Journey_shift
+    );
+    if (
+      !shiftBlock ||
+      !Array.isArray(shiftBlock.passengers) ||
+      shiftBlock.passengers.length === 0
+    ) {
       await sendWhatsAppMessage(phoneNumber, "No passengers assigned.");
       return res.json({ success: true, message: "No passengers assigned." });
     }
@@ -91,7 +107,9 @@ export const sendPassengerList = async (req, res) => {
       }
     }
     if (missingIds.length > 0) {
-      const missingPassengers = await Passenger.find({ _id: { $in: missingIds } })
+      const missingPassengers = await Passenger.find({
+        _id: { $in: missingIds },
+      })
         .select("Employee_Name Employee_PhoneNumber Employee_Address")
         .lean();
       for (const mp of missingPassengers) {
@@ -103,19 +121,32 @@ export const sendPassengerList = async (req, res) => {
       if (!ps || !ps.passenger) continue;
       const pId = toIdString(ps.passenger);
       if (!pId) continue;
-      if (boardedSet.has(pId)) continue; 
+      if (boardedSet.has(pId)) continue;
 
       const passengerObj = passengerMap.get(pId);
       if (!passengerObj) continue;
 
-      const title = formatTitle(passengerObj.Employee_Name || "Unknown", passengerObj.Employee_PhoneNumber || "");
-      const description = (`📍 ${passengerObj.Employee_Address || "Address not available"}`).slice(0, 70);
+      const title = formatTitle(
+        passengerObj.Employee_Name || "Unknown",
+        passengerObj.Employee_PhoneNumber || ""
+      );
+      const description =
+        `📍 ${passengerObj.Employee_Address || "Address not available"}`.slice(
+          0,
+          70
+        );
       rows.push({ title, description });
     }
 
     if (rows.length === 0) {
-      await sendWhatsAppMessage(phoneNumber, "No available passengers to display.");
-      return res.json({ success: true, message: "No available passengers to display." });
+      await sendWhatsAppMessage(
+        phoneNumber,
+        "No available passengers to display."
+      );
+      return res.json({
+        success: true,
+        message: "No available passengers to display.",
+      });
     }
 
     const watiPayload = {
@@ -125,12 +156,16 @@ export const sendPassengerList = async (req, res) => {
       buttonText: "Menu",
       sections: [{ title: "Passenger Details", rows }],
     };
-    const WATI_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImhhcmkudHJpcGF0aGlAZ3hpbmV0d29ya3MuY29tIiwibmFtZWlkIjoiaGFyaS50cmlwYXRoaUBneGluZXR3b3Jrcy5jb20iLCJlbWFpbCI6ImhhcmkudHJpcGF0aGlAZ3hpbmV0d29ya3MuY29tIiwiYXV0aF90aW1lIjoiMDUvMjAvMjAyNiAwODo1Mzo0NyIsInRlbmFudF9pZCI6IjM4ODQyOCIsImRiX25hbWUiOiJtdC1wcm9kLVRlbmFudHMiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBRE1JTklTVFJBVE9SIiwiZXhwIjoyNTM0MDIzMDA4MDAsImlzcyI6IkNsYXJlX0FJIiwiYXVkIjoiQ2xhcmVfQUkifQ.6Q0yiOOP9oIayALNylBAh_nVYlpB3Jt7PpR1gVG-FBY";
     const WATI_BASE = "https://live-mt-server.wati.io/388428";
 
-    if (!WATI_API_KEY) {
+    if (!wati_auth) {
       console.error("[sendPassengerList] Missing WATI_API_KEY env var");
-      return res.status(500).json({ success: false, message: "Server misconfiguration: WATI key missing." });
+      return res
+        .status(500)
+        .json({
+          success: false,
+          message: "Server misconfiguration: WATI key missing.",
+        });
     }
 
     const response = await axios.post(
@@ -138,7 +173,7 @@ export const sendPassengerList = async (req, res) => {
       watiPayload,
       {
         headers: {
-          Authorization: `Bearer ${WATI_API_KEY}`,
+          Authorization: `Bearer ${wati_auth}`,
           "Content-Type": "application/json-patch+json",
         },
         timeout: 15000,
