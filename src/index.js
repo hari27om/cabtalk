@@ -20,9 +20,7 @@ import shiftRoutes from "./routes/shiftRoutes.js";
 import shiftChangeRoutes from "./routes/shiftChangeRoutes.js";
 import gpsRoutes from "./routes/gpsRoutes.js";
 import alcoholTestRoutes from "./routes/alcoholTestRoutes.js";
-import dns from "node:dns";
 
-dns.promises.setServers(["1.1.1.1"]);
 const app = express();
 const server = http.createServer(app);
 
@@ -80,6 +78,7 @@ app.use("/api/v1/shiftOptions", shiftRoutes);
 app.use("/api/v1", shiftChangeRoutes);
 app.use("/api/v1", gpsRoutes);
 app.use("/api/v1/alcohol", alcoholTestRoutes);
+
 io.on("connection", (socket) => {
   socket.on("disconnect", () => {});
 });
@@ -102,7 +101,7 @@ app.use((err, req, res, next) => {
 const MONGO_URI =
   "mongodb+srv://vivekverma:vivekvermagxi@cab-talk.gus9m.mongodb.net/cabDB";
 // "mongodb+srv://hariomtri27:12341234@cdb.3a41aii.mongodb.net/CDB";
-await 
+
 mongoose
   .connect(MONGO_URI)
   .then(async (connection) => {
